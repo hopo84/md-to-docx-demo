@@ -1,0 +1,22 @@
+{
+  "name": "md-to-docx-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "docx": "^8.5.0",
+    "image-size": "^2.0.2",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.4"
+  },
+  "devDependencies": {
+    "@types/image-size": "^0.7.0",
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3",
+    "undici-types": "^7.18.2"
+  }
+}

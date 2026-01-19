@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  md-to-docx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: md-to-docx:latest
+    container_name: md-to-docx-converter
+    volumes:
+      # 挂载本地 input 目录到容器
+      - ./input:/app/input
+      # 挂载本地 output 目录到容器
+      - ./output:/app/output
+    # 默认转换 input.md 文件
+    command: ["node", "dist/index.js", "-f", "input.md"]
+    
+    # 可选：设置用户权限（避免生成文件的权限问题）
+    # user: "${UID:-1000}:${GID:-1000}"
+    
+    # 可选：设置网络代理（如果需要）
+    # environment:
+    #   - HTTP_PROXY=http://proxy.example.com:8080
+    #   - HTTPS_PROXY=http://proxy.example.com:8080

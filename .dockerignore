@@ -1,0 +1,31 @@
+# Node modules
+node_modules
+npm-debug.log
+
+# 编译输出
+dist
+
+# 输入输出目录（运行时挂载）
+input/*
+output/*
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 文档
+README.md
+
+# 测试文件
+*.test.ts
+*.spec.ts

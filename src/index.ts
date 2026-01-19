@@ -1,4 +1,5 @@
 import fs from "fs";
+import { join } from "path";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -20,9 +21,53 @@ import {
   ImageRun
 } from "docx";
 
-const markdown = fs.readFileSync("input.md", "utf-8");
+// 解析命令行参数
+function parseArgs(): { file: string } {
+  const args = process.argv.slice(2);
+  let file = "input.md"; // 默认文件
 
-const ast = unified().use(remarkParse).use(remarkGfm).parse(markdown);
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === "-f" || args[i] === "--file") && args[i + 1]) {
+      file = args[i + 1];
+      break;
+    }
+  }
+
+  return { file };
+}
+
+async function main() {
+  // 解析命令行参数
+  const { file } = parseArgs();
+  const inputPath = join("input", file);
+
+  // 检查文件是否存在
+  if (!fs.existsSync(inputPath)) {
+    console.error(`错误: 文件 "${inputPath}" 不存在！`);
+    console.log(`\n使用方法: npm start -- -f <文件名>`);
+    console.log(`示例: npm start -- -f input.md`);
+    process.exit(1);
+  }
+
+  // 检查是否为 .md 文件
+  if (!file.toLowerCase().endsWith(".md")) {
+    console.error(`错误: 不支持的文件类型！仅支持 .md 文件`);
+    process.exit(1);
+  }
+
+  console.log(`正在处理文件: ${inputPath}`);
+
+  // 提取文件名（不含扩展名）用于输出文件名
+  const fileNameWithoutExt = file.replace(/\.md$/i, "");
+
+  // 读取文件内容
+  const markdown = fs.readFileSync(inputPath, "utf-8");
+
+  const ast = unified().use(remarkParse).use(remarkGfm).parse(markdown);
+
+  // 处理文档逻辑
+  await processMarkdownToDocx(ast, fileNameWithoutExt);
+}
 
 // 下载图片并返回 Buffer
 async function downloadImage(url: string): Promise<Buffer> {
@@ -432,8 +477,6 @@ function buildCodeBlock(node: any): Paragraph {
   });
 }
 
-const children: any[] = [];
-
 // 处理段落中的图片节点
 async function processImageNode(imageNode: any): Promise<ImageRun | null> {
   if (!imageNode.url) {
@@ -477,136 +520,153 @@ async function processImageNode(imageNode: any): Promise<ImageRun | null> {
   }
 }
 
-for (const node of ast.children as any[]) {
-  if (node.type === "heading") {
-    const textRuns = convertInlineNodes(node.children || []);
-    children.push(
-      new Paragraph({
-        children: textRuns.length > 0 ? textRuns : [new TextRun({ text: "" })],
-        heading: getHeadingLevel(node.depth),
-        spacing: { before: node.depth === 1 ? 240 : 120, after: 120 }
-      })
-    );
-  } else if (node.type === "paragraph") {
-    // 检查是否只包含一个图片节点
-    const imageNodes = (node.children || []).filter((child: any) => child.type === "image");
-    
-    if (imageNodes.length === 1 && node.children.length === 1) {
-      // 独立图片段落
-      const imageNode = imageNodes[0];
-      const imageRun = await processImageNode(imageNode);
+// 处理 Markdown AST 并生成 DOCX
+async function processMarkdownToDocx(ast: any, fileNameWithoutExt: string) {
+  const children: any[] = [];
+
+  for (const node of ast.children as any[]) {
+    if (node.type === "heading") {
+      const textRuns = convertInlineNodes(node.children || []);
+      children.push(
+        new Paragraph({
+          children: textRuns.length > 0 ? textRuns : [new TextRun({ text: "" })],
+          heading: getHeadingLevel(node.depth),
+          spacing: { before: node.depth === 1 ? 240 : 120, after: 120 }
+        })
+      );
+    } else if (node.type === "paragraph") {
+      // 检查是否只包含一个图片节点
+      const imageNodes = (node.children || []).filter((child: any) => child.type === "image");
       
-      if (imageRun) {
-        children.push(
-          new Paragraph({
-            children: [imageRun],
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 120, after: 120 }
-          })
-        );
-      } else {
-        // 如果图片处理失败，显示alt文本
-        const altText = imageNode.alt || "图片";
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: `[图片: ${altText}]`, italics: true, color: "808080" })],
-            spacing: { after: 120 }
-          })
-        );
-      }
-    } else {
-      // 正常文本段落（可能包含文本和图片混合）
-      const paragraphText = extractText(node.children || []);
-      
-      // 检查是否包含多个 ✅ 符号（可能是多个列表项被合并为一个段落）
-      const checkmarkCount = (paragraphText.match(/✅/g) || []).length;
-      
-      if (checkmarkCount > 1) {
-        // 按 ✅ 符号拆分段落，但需要保留格式化信息
-        // 遍历子节点，按 ✅ 分组
-        let currentGroup: any[] = [];
-        const groups: any[][] = [];
+      if (imageNodes.length === 1 && node.children.length === 1) {
+        // 独立图片段落
+        const imageNode = imageNodes[0];
+        const imageRun = await processImageNode(imageNode);
         
-        for (const child of node.children || []) {
-          const childText = extractText([child]);
-          if (childText.includes("✅") && currentGroup.length > 0) {
-            // 遇到新的 ✅，保存当前组并开始新组
-            groups.push([...currentGroup]);
-            currentGroup = [child];
-          } else {
-            currentGroup.push(child);
-          }
-        }
-        
-        if (currentGroup.length > 0) {
-          groups.push(currentGroup);
-        }
-        
-        // 为每个组创建独立的段落
-        for (const group of groups) {
-          const groupTextRuns = convertInlineNodes(group);
+        if (imageRun) {
           children.push(
             new Paragraph({
-              children: groupTextRuns.length > 0 ? groupTextRuns : [new TextRun({ text: "" })],
+              children: [imageRun],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 120, after: 120 }
+            })
+          );
+        } else {
+          // 如果图片处理失败，显示alt文本
+          const altText = imageNode.alt || "图片";
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: `[图片: ${altText}]`, italics: true, color: "808080" })],
               spacing: { after: 120 }
             })
           );
         }
       } else {
-        // 单个段落，正常处理
-        const textRuns = convertInlineNodes(node.children || []);
-        children.push(
-          new Paragraph({
-            children: textRuns.length > 0 ? textRuns : [new TextRun({ text: "" })],
-            spacing: { after: 120 }
-          })
-        );
+        // 正常文本段落（可能包含文本和图片混合）
+        const paragraphText = extractText(node.children || []);
+        
+        // 检查是否包含多个 ✅ 符号（可能是多个列表项被合并为一个段落）
+        const checkmarkCount = (paragraphText.match(/✅/g) || []).length;
+        
+        if (checkmarkCount > 1) {
+          // 按 ✅ 符号拆分段落，但需要保留格式化信息
+          // 遍历子节点，按 ✅ 分组
+          let currentGroup: any[] = [];
+          const groups: any[][] = [];
+          
+          for (const child of node.children || []) {
+            const childText = extractText([child]);
+            if (childText.includes("✅") && currentGroup.length > 0) {
+              // 遇到新的 ✅，保存当前组并开始新组
+              groups.push([...currentGroup]);
+              currentGroup = [child];
+            } else {
+              currentGroup.push(child);
+            }
+          }
+          
+          if (currentGroup.length > 0) {
+            groups.push(currentGroup);
+          }
+          
+          // 为每个组创建独立的段落
+          for (const group of groups) {
+            const groupTextRuns = convertInlineNodes(group);
+            children.push(
+              new Paragraph({
+                children: groupTextRuns.length > 0 ? groupTextRuns : [new TextRun({ text: "" })],
+                spacing: { after: 120 }
+              })
+            );
+          }
+        } else {
+          // 单个段落，正常处理
+          const textRuns = convertInlineNodes(node.children || []);
+          children.push(
+            new Paragraph({
+              children: textRuns.length > 0 ? textRuns : [new TextRun({ text: "" })],
+              spacing: { after: 120 }
+            })
+          );
+        }
       }
+    } else if (node.type === "table") {
+      children.push(buildTable(node));
+      children.push(new Paragraph({ text: "", spacing: { after: 120 } }));
+    } else if (node.type === "list") {
+      children.push(...buildList(node));
+    } else if (node.type === "blockquote") {
+      children.push(...buildBlockquote(node));
+    } else if (node.type === "code") {
+      children.push(buildCodeBlock(node));
+    } else if (node.type === "thematicBreak" || node.type === "hr") {
+      // 水平线 - 使用带边框的段落表示
+      children.push(
+        new Paragraph({
+          text: "",
+          spacing: { before: 120, after: 120 },
+          border: {
+            bottom: {
+              color: "000000",
+              size: 6,
+              style: BorderStyle.SINGLE
+            }
+          }
+        })
+      );
     }
-  } else if (node.type === "table") {
-    children.push(buildTable(node));
-    children.push(new Paragraph({ text: "", spacing: { after: 120 } }));
-  } else if (node.type === "list") {
-    children.push(...buildList(node));
-  } else if (node.type === "blockquote") {
-    children.push(...buildBlockquote(node));
-  } else if (node.type === "code") {
-    children.push(buildCodeBlock(node));
-  } else if (node.type === "thematicBreak" || node.type === "hr") {
-    // 水平线 - 使用带边框的段落表示
-    children.push(
-      new Paragraph({
-        text: "",
-        spacing: { before: 120, after: 120 },
-        border: {
-          bottom: {
-            color: "000000",
-            size: 6,
-            style: BorderStyle.SINGLE
+  }
+
+  const doc = new Document({
+    sections: [{
+      children: children,
+      properties: {
+        page: {
+          margin: {
+            top: 1440,
+            right: 1440,
+            bottom: 1440,
+            left: 1440
           }
         }
-      })
-    );
+      }
+    }]
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+  
+  // 生成秒级时间戳
+  const timestamp = Math.floor(Date.now() / 1000);
+  const outputPath = join("output", `output_${fileNameWithoutExt}_${timestamp}.docx`);
+  
+  // 确保 output 目录存在
+  if (!fs.existsSync("output")) {
+    fs.mkdirSync("output", { recursive: true });
   }
+  
+  fs.writeFileSync(outputPath, buffer);
+  
+  console.log(`✅ ${outputPath} generated`);
 }
 
-const doc = new Document({
-  sections: [{
-    children: children,
-    properties: {
-      page: {
-        margin: {
-          top: 1440,
-          right: 1440,
-          bottom: 1440,
-          left: 1440
-        }
-      }
-    }
-  }]
-});
-
-const buffer = await Packer.toBuffer(doc);
-fs.writeFileSync("output.docx", buffer);
-
-console.log("✅ output.docx generated");
+main();

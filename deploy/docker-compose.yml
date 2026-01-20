@@ -3,15 +3,15 @@ version: '3.8'
 services:
   md-to-docx:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
     image: md-to-docx:latest
     container_name: md-to-docx-converter
     volumes:
       # 挂载本地 input 目录到容器
-      - ./input:/app/input
+      - ../input:/app/input
       # 挂载本地 output 目录到容器
-      - ./output:/app/output
+      - ../output:/app/output
     # 默认转换 input.md 文件
     command: ["node", "dist/index.js", "-f", "input.md"]
     

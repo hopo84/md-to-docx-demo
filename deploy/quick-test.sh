@@ -137,7 +137,7 @@ EOF
     print_header "4. 构建 Docker 镜像"
     print_info "开始构建镜像（可能需要几分钟）..."
     
-    if docker build -t md-to-docx:latest . > /tmp/docker-build.log 2>&1; then
+    if docker build -f deploy/Dockerfile -t md-to-docx:latest . > /tmp/docker-build.log 2>&1; then
         print_success "Docker 镜像构建成功"
     else
         print_error "Docker 镜像构建失败"

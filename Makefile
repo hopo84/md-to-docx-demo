@@ -40,7 +40,7 @@ clean:
 # 构建 Docker 镜像
 docker-build:
 	@echo "正在构建 Docker 镜像..."
-	docker build -t md-to-docx:latest .
+	docker build -f deploy/Dockerfile -t md-to-docx:latest .
 	@echo "✅ Docker 镜像构建完成"
 
 # 运行 Docker 转换
@@ -57,9 +57,9 @@ docker-run:
 docker-test: docker-build
 	@echo "创建测试文件..."
 	@mkdir -p input output
-	@echo "# Docker 测试\n\n这是一个测试文档。\n\n- 项目 1\n- 项目 2\n\n**测试成功！**" > input/docker-test.md
+	@cp deploy/example-test.md input/ 2>/dev/null || echo "# Docker 测试\n\n这是一个测试文档。\n\n- 项目 1\n- 项目 2\n\n**测试成功！**" > input/docker-test.md
 	@echo "运行转换..."
-	@make docker-run FILE=docker-test.md
+	@make docker-run FILE=docker-test.md || make docker-run FILE=example-test.md
 	@echo "✅ 测试完成！查看 output/ 目录"
 
 # 清理 Docker 资源
@@ -72,19 +72,16 @@ docker-clean:
 # 完整测试
 test:
 	@echo "运行完整测试..."
-	@mkdir -p input output
-	@cp example-test.md input/
-	@make docker-build
-	@make docker-run FILE=example-test.md
+	@chmod +x deploy/quick-test.sh
+	@cd "$(PWD)" && ./deploy/quick-test.sh
 	@echo "✅ 完整测试完成！"
-	@ls -lh output/
 
 # Docker Compose 相关
 compose-build:
-	docker-compose build
+	cd deploy && docker-compose build
 
 compose-run:
-	docker-compose run --rm md-to-docx node dist/index.js -f $(or $(FILE),input.md)
+	cd deploy && docker-compose run --rm md-to-docx node dist/index.js -f $(or $(FILE),input.md)
 
 # 安装依赖
 install:
